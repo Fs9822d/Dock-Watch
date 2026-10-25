@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Local configuration & environment
+.env
+.env.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test coverage
+coverage/
+
+# dock-watch local crash dump directory
+.dock-watch/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Ignored project skills directory
+skills/
