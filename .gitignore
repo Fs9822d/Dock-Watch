@@ -22,3 +22,13 @@ Thumbs.db
 
 # Ignored project skills directory
 skills/
+
+# Build executables
+dist/
+
+# Scratch & learning notes
+scratch/
+bin/
+
+# AI systems configs
+GEMINI.md
