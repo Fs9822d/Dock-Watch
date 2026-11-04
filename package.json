@@ -1,13 +1,38 @@
 {
   "name": "dock-watch",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Flight Recorder and Diagnostics TUI for Docker Containers",
+  "main": "dist/dock-watch.js",
   "type": "module",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "bin": {
+    "dock-watch": "./dist/dock-watch.js"
   },
-  "keywords": [],
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "scripts": {
+    "build": "esbuild src/index.jsx --bundle --platform=node --format=esm --target=node22 --outfile=dist/dock-watch.js --banner:js='#!/usr/bin/env node\nimport { createRequire } from \"node:module\"; const require = createRequire(import.meta.url);'",
+    "dev": "node dist/dock-watch.js",
+    "start": "node dist/dock-watch.js",
+    "test": "node --test tests/**/*.test.js"
+  },
+  "keywords": [
+    "docker",
+    "tui",
+    "telemetry",
+    "observability",
+    "flight-recorder",
+    "containers"
+  ],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "ink": "^5.1.0",
+    "react": "^18.3.1",
+    "react-devtools-core": "^4.28.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
 }
