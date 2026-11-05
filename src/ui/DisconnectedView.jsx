@@ -1,7 +1,17 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { truncate } from '../utils/formatters.js';
 
-export function DisconnectedView({ checkedPaths = [], countdown = 2, error }) {
+export function DisconnectedView({
+  checkedPaths = [],
+  countdown = 2,
+  error,
+  columns = process.stdout.columns || 120,
+}) {
+  const isNarrow = columns < 85;
+  const isVeryNarrow = columns < 70;
+  const maxPathLen = Math.max(15, columns - 34);
+
   return (
     <Box
       flexDirection="column"
@@ -11,12 +21,14 @@ export function DisconnectedView({ checkedPaths = [], countdown = 2, error }) {
       marginY={1}
     >
       <Box marginBottom={1}>
-        <Text bold color="red">✖ DOCKER DAEMON SOCKET UNREACHABLE</Text>
+        <Text bold color="red">
+          {isVeryNarrow ? '✖ DOCKER UNREACHABLE' : '✖ DOCKER DAEMON SOCKET UNREACHABLE'}
+        </Text>
       </Box>
 
       {error && (
         <Box marginBottom={1}>
-          <Text color="yellow">Notice: {error}</Text>
+          <Text color="yellow">Notice: {truncate(error, Math.max(20, columns - 18))}</Text>
         </Box>
       )}
 
@@ -25,7 +37,7 @@ export function DisconnectedView({ checkedPaths = [], countdown = 2, error }) {
         {checkedPaths.length > 0 ? (
           checkedPaths.map((p, i) => (
             <Box key={i} marginLeft={2}>
-              <Text dimColor>• {p} </Text>
+              <Text dimColor>• {truncate(p, maxPathLen)} </Text>
               <Text color="red">[Not Found / Closed]</Text>
             </Box>
           ))
@@ -41,7 +53,7 @@ export function DisconnectedView({ checkedPaths = [], countdown = 2, error }) {
         <Box marginLeft={2}>
           <Text dimColor>1. Docker Service: </Text>
           <Text color="white">sudo systemctl start docker </Text>
-          <Text dimColor>(or start Docker Desktop)</Text>
+          {!isNarrow && <Text dimColor>(or start Docker Desktop)</Text>}
         </Box>
         <Box marginLeft={2}>
           <Text dimColor>2. Rootless Podman: </Text>
@@ -49,22 +61,22 @@ export function DisconnectedView({ checkedPaths = [], countdown = 2, error }) {
         </Box>
         <Box marginLeft={2}>
           <Text dimColor>3. Custom Socket: </Text>
-          <Text color="white">dock-watch --socket /path/to/docker.sock</Text>
+          <Text color="white">{isVeryNarrow ? 'dock-watch -s <path>' : 'dock-watch --socket /path/to/docker.sock'}</Text>
         </Box>
       </Box>
 
       <Box marginTop={1} justifyContent="space-between">
         <Box>
-          <Text color="cyan">Auto-reconnecting in </Text>
+          <Text color="cyan">{isVeryNarrow ? 'Retry in ' : 'Auto-reconnecting in '}</Text>
           <Text bold color="yellow">{countdown}s</Text>
-          <Text color="cyan">...</Text>
+          {!isVeryNarrow && <Text color="cyan">...</Text>}
         </Box>
         <Box>
-          <Text dimColor>Press </Text>
+          <Text dimColor>{isVeryNarrow ? '' : 'Press '}</Text>
           <Text bold color="white">r</Text>
-          <Text dimColor> to retry now, </Text>
+          <Text dimColor>{isVeryNarrow ? ' retry, ' : ' to retry now, '}</Text>
           <Text bold color="white">q</Text>
-          <Text dimColor> to quit</Text>
+          <Text dimColor>{isVeryNarrow ? ' quit' : ' to quit'}</Text>
         </Box>
       </Box>
     </Box>

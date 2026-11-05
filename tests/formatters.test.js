@@ -6,6 +6,8 @@ import {
   getMetricColor,
   truncate,
   cleanContainerName,
+  getResponsiveLayout,
+  calculateTableLayout,
 } from '../src/utils/formatters.js';
 
 test('formatBytes formats binary bytes accurately', () => {
@@ -46,3 +48,75 @@ test('cleanContainerName strips leading slash', () => {
   assert.equal(cleanContainerName(['/frontend', '/alias']), 'frontend');
   assert.equal(cleanContainerName('redis'), 'redis');
 });
+
+test('getResponsiveLayout returns full mode for width >= 115', () => {
+  const layout160 = getResponsiveLayout(160);
+  assert.equal(layout160.mode, 'full');
+  assert.equal(layout160.showStorage, true);
+  assert.equal(layout160.compactStorage, false);
+  assert.equal(layout160.columns.storage, 24);
+  assert.equal(layout160.columns.selector, 3);
+  assert.ok(layout160.totalWidth <= 160);
+
+  const layout115 = getResponsiveLayout(115);
+  assert.equal(layout115.mode, 'full');
+  assert.equal(layout115.showStorage, true);
+  assert.equal(layout115.compactStorage, false);
+  assert.equal(layout115.columns.storage, 24);
+  // Column total + 4 overhead fits within 115
+  assert.ok(layout115.totalWidth + 4 <= 115);
+});
+
+test('getResponsiveLayout returns compact mode for 90 <= width < 115', () => {
+  const layout114 = getResponsiveLayout(114);
+  assert.equal(layout114.mode, 'compact');
+  assert.equal(layout114.showStorage, true);
+  assert.equal(layout114.compactStorage, true);
+  assert.ok(layout114.columns.name <= 16);
+  assert.ok(layout114.columns.image <= 16);
+  assert.ok(layout114.columns.storage <= 14);
+  assert.ok(layout114.totalWidth + 4 <= 114);
+
+  const layout90 = getResponsiveLayout(90);
+  assert.equal(layout90.mode, 'compact');
+  assert.equal(layout90.showStorage, true);
+  assert.equal(layout90.compactStorage, true);
+  assert.ok(layout90.totalWidth + 4 <= 90);
+});
+
+test('getResponsiveLayout returns minimal mode with hidden storage for width < 90', () => {
+  const layout89 = getResponsiveLayout(89);
+  assert.equal(layout89.mode, 'minimal');
+  assert.equal(layout89.showStorage, false);
+  assert.equal(layout89.compactStorage, false);
+  assert.equal(layout89.columns.storage, 0);
+  assert.ok(layout89.totalWidth + 4 <= 89);
+
+  const layout80 = getResponsiveLayout(80);
+  assert.equal(layout80.mode, 'minimal');
+  assert.equal(layout80.showStorage, false);
+  assert.equal(layout80.columns.storage, 0);
+  assert.ok(layout80.totalWidth + 4 <= 80);
+
+  const layout60 = getResponsiveLayout(60);
+  assert.equal(layout60.mode, 'minimal');
+  assert.equal(layout60.showStorage, false);
+  assert.ok(layout60.totalWidth + 4 <= 60);
+});
+
+test('getResponsiveLayout safely handles invalid inputs and defaults to full', () => {
+  const defaultLayout = getResponsiveLayout();
+  assert.equal(defaultLayout.mode, 'full');
+  assert.equal(defaultLayout.showStorage, true);
+
+  assert.equal(getResponsiveLayout(null).mode, 'full');
+  assert.equal(getResponsiveLayout(undefined).mode, 'full');
+  assert.equal(getResponsiveLayout(NaN).mode, 'full');
+  assert.equal(getResponsiveLayout(-10).mode, 'full');
+  assert.equal(getResponsiveLayout(0).mode, 'full');
+});
+
+test('calculateTableLayout is an alias of getResponsiveLayout', () => {
+  assert.strictEqual(calculateTableLayout, getResponsiveLayout);
+});
+

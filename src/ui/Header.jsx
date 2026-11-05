@@ -1,13 +1,28 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 
-export function Header({ socketPath, isConnected, runningCount = 0, totalCount = 0 }) {
+export function Header({
+  socketPath,
+  isConnected,
+  runningCount = 0,
+  totalCount = 0,
+  columns = process.stdout.columns || 120,
+}) {
+  const showSubtitle = columns >= 80;
+  const maxSocketLen = Math.max(12, columns - 42);
+  let displaySocket = socketPath || 'Auto-detecting...';
+  if (displaySocket.length > maxSocketLen) {
+    displaySocket = `…${displaySocket.slice(-(maxSocketLen - 1))}`;
+  }
+
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} marginBottom={1}>
       <Box justifyContent="space-between">
         <Box>
           <Text bold color="cyan">DOCK-WATCH </Text>
-          <Text dimColor>| Automated Flight Recorder & Diagnostics</Text>
+          {showSubtitle && (
+            <Text dimColor>| Automated Flight Recorder & Diagnostics</Text>
+          )}
         </Box>
         <Box>
           {isConnected ? (
@@ -20,7 +35,7 @@ export function Header({ socketPath, isConnected, runningCount = 0, totalCount =
       <Box justifyContent="space-between" marginTop={0}>
         <Box>
           <Text dimColor>Socket: </Text>
-          <Text color="white">{socketPath || 'Auto-detecting...'}</Text>
+          <Text color="white">{displaySocket}</Text>
         </Box>
         <Box>
           <Text dimColor>Active: </Text>

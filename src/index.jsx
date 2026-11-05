@@ -1,6 +1,11 @@
 import React from 'react';
 import { render } from 'ink';
 import { App } from './ui/App.jsx';
+import {
+  ANSI_ENTER_ALT_SCREEN,
+  ANSI_LEAVE_ALT_SCREEN,
+  ANSI_CLEAR_VIEWPORT,
+} from './utils/constants.js';
 
 function parseCliArgs() {
   const args = process.argv.slice(2);
@@ -46,6 +51,18 @@ KEYBOARD CONTROLS:
 `);
 }
 
+let isCleanedUp = false;
+export function cleanup() {
+  if (isCleanedUp) return;
+  isCleanedUp = true;
+  // Leave alternate screen buffer and restore cursor
+  try {
+    process.stdout.write(ANSI_LEAVE_ALT_SCREEN);
+  } catch {
+    // Ignore errors if stream is closed
+  }
+}
+
 async function main() {
   const options = parseCliArgs();
 
@@ -59,24 +76,75 @@ async function main() {
     process.exit(0);
   }
 
+  // Enter the alternate screen buffer and reset cursor to home (1,1)
+  // This isolates dock-watch from the shell scrollback history and prevents ghost line retention
+  process.stdout.write(ANSI_ENTER_ALT_SCREEN);
+
   // Render the Ink TUI
   const app = render(<App cliSocketPath={options.socket} />);
 
+  // Handle terminal resizing (SIGWINCH): debounce, reset line count, clear viewport, and force rerender
+  let resizeTimer = null;
+  const handleResize = () => {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (typeof app.clear === 'function') {
+        app.clear();
+      }
+      process.stdout.write(ANSI_CLEAR_VIEWPORT);
+      // Force rerender with fresh dimensions so vertical-only resize immediately repaints
+      app.rerender(
+        <App
+          cliSocketPath={options.socket}
+          forcedColumns={process.stdout.columns || 120}
+          resizeTick={Date.now()}
+        />
+      );
+    }, 60);
+  };
+
+  process.stdout.on('resize', handleResize);
+
+  const handleExit = () => {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    process.stdout.off('resize', handleResize);
+    app.unmount();
+    cleanup();
+    process.exit(0);
+  };
+
   // Handle termination signals cleanly
-  process.on('SIGINT', () => {
-    app.unmount();
-    process.exit(0);
+  process.on('SIGINT', handleExit);
+  process.on('SIGTERM', handleExit);
+  process.on('SIGHUP', handleExit);
+  process.on('exit', () => {
+    cleanup();
   });
 
-  process.on('SIGTERM', () => {
+  try {
+    await app.waitUntilExit();
+  } finally {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    process.stdout.off('resize', handleResize);
     app.unmount();
-    process.exit(0);
-  });
-
-  await app.waitUntilExit();
+    cleanup();
+  }
 }
 
+process.on('unhandledRejection', (err) => {
+  cleanup();
+  console.error('Fatal dock-watch unhandled rejection:', err);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  cleanup();
+  console.error('Fatal dock-watch uncaught exception:', err);
+  process.exit(1);
+});
+
 main().catch((err) => {
+  cleanup();
   console.error('Fatal dock-watch error:', err);
   process.exit(1);
 });

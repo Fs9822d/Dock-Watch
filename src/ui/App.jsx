@@ -10,9 +10,17 @@ import { ContainerTable } from './ContainerTable.jsx';
 import { DisconnectedView } from './DisconnectedView.jsx';
 import { Footer } from './Footer.jsx';
 
-export function App({ cliSocketPath = null }) {
+export function App({
+  cliSocketPath = null,
+  initialColumns = null,
+  forcedColumns = null,
+  resizeTick = 0,
+}) {
   const { exit } = useApp();
 
+  const [columns, setColumns] = useState(
+    () => forcedColumns || initialColumns || process.stdout.columns || 120
+  );
   const [status, setStatus] = useState('connecting'); // 'connecting' | 'connected' | 'disconnected'
   const [socketPath, setSocketPath] = useState(null);
   const [checkedPaths, setCheckedPaths] = useState([]);
@@ -28,6 +36,15 @@ export function App({ cliSocketPath = null }) {
   const clientRef = useRef(null);
   const storageCacheRef = useRef(new Map()); // containerId -> { sizeRw, sizeRootFs, lastFetched }
   const isFetchingRef = useRef(false);
+
+  // Synchronize columns when updated by the resize coordinator
+  useEffect(() => {
+    if (forcedColumns) {
+      setColumns(forcedColumns);
+    } else if (process.stdout.columns) {
+      setColumns(process.stdout.columns);
+    }
+  }, [forcedColumns, resizeTick]);
 
   // Initialize or attempt connection
   const attemptConnection = useCallback(async () => {
@@ -203,6 +220,16 @@ export function App({ cliSocketPath = null }) {
 
   const runningCount = containers.filter((c) => c.state === 'running').length;
 
+  if (columns < 46) {
+    return (
+      <Box borderStyle="single" borderColor="yellow" padding={1} margin={1} flexDirection="column">
+        <Text bold color="yellow">⚠️  TERMINAL WINDOW TOO NARROW</Text>
+        <Text dimColor>Current width: {columns} cols. Minimum required: 46 cols.</Text>
+        <Text dimColor>Please expand your terminal window.</Text>
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column" padding={1}>
       <Header
@@ -210,6 +237,7 @@ export function App({ cliSocketPath = null }) {
         isConnected={status === 'connected'}
         runningCount={runningCount}
         totalCount={containers.length}
+        columns={columns}
       />
 
       {status === 'connecting' ? (
@@ -221,16 +249,18 @@ export function App({ cliSocketPath = null }) {
           checkedPaths={checkedPaths}
           countdown={countdown}
           error={errorMsg}
+          columns={columns}
         />
       ) : (
         <ContainerTable
           containers={containers}
           selectedIndex={selectedIndex}
           expandedId={expandedId}
+          columns={columns}
         />
       )}
 
-      <Footer lastUpdated={lastUpdated} isConnected={status === 'connected'} />
+      <Footer lastUpdated={lastUpdated} isConnected={status === 'connected'} columns={columns} />
     </Box>
   );
 }

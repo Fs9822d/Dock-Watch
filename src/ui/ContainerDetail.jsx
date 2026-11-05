@@ -1,8 +1,8 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { formatBytes } from '../utils/formatters.js';
+import { formatBytes, truncate } from '../utils/formatters.js';
 
-export function ContainerDetail({ container }) {
+export function ContainerDetail({ container, columns = process.stdout.columns || 120 }) {
   if (!container) return null;
 
   const stats = container.stats;
@@ -29,6 +29,10 @@ export function ContainerDetail({ container }) {
       .join(', ') || 'None';
   }
 
+  const isNarrow = columns < 105;
+  const maxTitleName = Math.max(8, columns - (columns < 80 ? 30 : 54));
+  const maxFieldLen = Math.max(16, isNarrow ? columns - 18 : Math.floor(columns * 0.48) - 14);
+
   return (
     <Box
       flexDirection="column"
@@ -36,38 +40,42 @@ export function ContainerDetail({ container }) {
       borderColor="blue"
       paddingX={1}
       marginY={1}
-      marginLeft={2}
+      marginLeft={isNarrow ? 0 : 2}
     >
       <Box marginBottom={0}>
-        <Text bold color="yellow">Container Diagnostics & Inspector: </Text>
-        <Text bold color="white">{container.name}</Text>
+        <Text bold color="yellow">{columns < 75 ? 'Diagnostics: ' : 'Container Diagnostics & Inspector: '}</Text>
+        <Text bold color="white">{truncate(container.name, maxTitleName)}</Text>
         <Text dimColor> ({container.id.slice(0, 12)})</Text>
       </Box>
 
-      <Box flexDirection="row" justifyContent="space-between" marginTop={1}>
+      <Box
+        flexDirection={isNarrow ? 'column' : 'row'}
+        justifyContent="space-between"
+        marginTop={1}
+      >
         {/* Left Column: Config & Runtime */}
-        <Box flexDirection="column" width="48%">
+        <Box flexDirection="column" width={isNarrow ? '100%' : '48%'}>
           <Text underline bold color="cyan">Runtime Configuration</Text>
           <Box>
             <Text dimColor>Image: </Text>
-            <Text>{container.image}</Text>
+            <Text>{truncate(container.image, maxFieldLen)}</Text>
           </Box>
           <Box>
             <Text dimColor>State: </Text>
-            <Text color={container.state === 'running' ? 'green' : 'yellow'}>{container.status}</Text>
+            <Text color={container.state === 'running' ? 'green' : 'yellow'}>{truncate(container.status, maxFieldLen)}</Text>
           </Box>
           <Box>
             <Text dimColor>Ports: </Text>
-            <Text>{ports || 'None'}</Text>
+            <Text>{truncate(ports || 'None', maxFieldLen)}</Text>
           </Box>
           <Box>
             <Text dimColor>Command: </Text>
-            <Text dimColor>{container.command || 'N/A'}</Text>
+            <Text dimColor>{truncate(container.command || 'N/A', maxFieldLen)}</Text>
           </Box>
         </Box>
 
         {/* Right Column: Telemetry & Storage */}
-        <Box flexDirection="column" width="48%">
+        <Box flexDirection="column" width={isNarrow ? '100%' : '48%'} marginTop={isNarrow ? 1 : 0}>
           <Text underline bold color="cyan">Storage & Network Metrics</Text>
           <Box>
             <Text dimColor>Writable Disk (SizeRw): </Text>
@@ -79,11 +87,11 @@ export function ContainerDetail({ container }) {
           </Box>
           <Box>
             <Text dimColor>Block Disk I/O: </Text>
-            <Text>Read: {formatBytes(storage.blockReadBytes)} | Write: {formatBytes(storage.blockWriteBytes)}</Text>
+            <Text>Read: {formatBytes(storage.blockReadBytes, 0)} | Write: {formatBytes(storage.blockWriteBytes, 0)}</Text>
           </Box>
           <Box>
             <Text dimColor>Network Bandwidth: </Text>
-            <Text>RX: {formatBytes(network.rxBytes)} | TX: {formatBytes(network.txBytes)}</Text>
+            <Text>RX: {formatBytes(network.rxBytes, 0)} | TX: {formatBytes(network.txBytes, 0)}</Text>
           </Box>
         </Box>
       </Box>
