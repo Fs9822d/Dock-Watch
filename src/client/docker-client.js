@@ -122,25 +122,14 @@ export class DockerClient {
    * @param {boolean} [options.size=false]
    * @returns {Promise<Array<object>>}
    */
-  async listContainers({ all = false, size = false } = {}) {
+  listContainers({ all = false, size = false } = {}) {
     const query = new URLSearchParams();
     if (all) query.set('all', '1');
     if (size) query.set('size', '1');
 
     const qs = query.toString();
     const endpoint = `/containers/json${qs ? `?${qs}` : ''}`;
-    return await this.request(endpoint);
-  }
-
-  /**
-   * Inspect a container.
-   * @param {string} id Container ID or name
-   * @param {boolean} [size=false] Compute container disk size (SizeRw, SizeRootFs)
-   * @returns {Promise<object>}
-   */
-  async getContainerDetails(id, size = false) {
-    const endpoint = `/containers/${encodeURIComponent(id)}/json${size ? '?size=true' : ''}`;
-    return await this.request(endpoint);
+    return this.request(endpoint);
   }
 
   /**
@@ -148,8 +137,8 @@ export class DockerClient {
    * @param {string} id Container ID or name
    * @returns {Promise<object>}
    */
-  async getContainerStats(id) {
+  getContainerStats(id) {
     const endpoint = `/containers/${encodeURIComponent(id)}/stats?stream=0`;
-    return await this.request(endpoint);
+    return this.request(endpoint);
   }
 }

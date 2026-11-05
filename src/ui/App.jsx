@@ -4,7 +4,7 @@ import { resolveDockerSocket } from '../client/socket-resolver.js';
 import { DockerClient } from '../client/docker-client.js';
 import { parseContainerStats } from '../telemetry/stats-parser.js';
 import { cleanContainerName } from '../utils/formatters.js';
-import { POLL_INTERVAL_MS, STORAGE_REFRESH_INTERVAL_MS, RECONNECT_INTERVAL_MS } from '../utils/constants.js';
+import { POLL_INTERVAL_MS, STORAGE_REFRESH_INTERVAL_MS } from '../utils/constants.js';
 import { Header } from './Header.jsx';
 import { ContainerTable } from './ContainerTable.jsx';
 import { DisconnectedView } from './DisconnectedView.jsx';

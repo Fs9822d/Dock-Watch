@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { formatBytes, formatPercent } from '../utils/formatters.js';
+import { formatBytes } from '../utils/formatters.js';
 
 export function ContainerDetail({ container }) {
   if (!container) return null;
@@ -8,20 +8,26 @@ export function ContainerDetail({ container }) {
   const stats = container.stats;
   const storage = stats?.storage || {};
   const network = stats?.network || {};
-  const details = container.details || {};
 
-  const ports = (container.Ports || details.NetworkSettings?.Ports)
-    ? Object.entries(container.Ports || details.NetworkSettings?.Ports || {})
-        .map(([containerPort, bindings]) => {
-          if (!bindings) return containerPort;
-          if (Array.isArray(bindings)) {
-            const hostPorts = bindings.map((b) => `${b.HostIp || '0.0.0.0'}:${b.HostPort}`).join(',');
-            return `${hostPorts} -> ${containerPort}`;
-          }
-          return containerPort;
-        })
-        .join(', ')
-    : 'None';
+  let ports = 'None';
+  if (Array.isArray(container.Ports) && container.Ports.length > 0) {
+    ports = container.Ports.map((p) => {
+      if (p.PublicPort) {
+        return `${p.IP || '0.0.0.0'}:${p.PublicPort} -> ${p.PrivatePort}/${p.Type || 'tcp'}`;
+      }
+      return `${p.PrivatePort}/${p.Type || 'tcp'}`;
+    }).join(', ');
+  } else if (container.Ports && typeof container.Ports === 'object') {
+    ports = Object.entries(container.Ports)
+      .map(([port, bindings]) => {
+        if (Array.isArray(bindings)) {
+          const hostPorts = bindings.map((b) => `${b.HostIp || '0.0.0.0'}:${b.HostPort}`).join(',');
+          return `${hostPorts} -> ${port}`;
+        }
+        return port;
+      })
+      .join(', ') || 'None';
+  }
 
   return (
     <Box
@@ -56,7 +62,7 @@ export function ContainerDetail({ container }) {
           </Box>
           <Box>
             <Text dimColor>Command: </Text>
-            <Text dimColor>{container.command || details.Config?.Cmd?.join(' ') || 'N/A'}</Text>
+            <Text dimColor>{container.command || 'N/A'}</Text>
           </Box>
         </Box>
 

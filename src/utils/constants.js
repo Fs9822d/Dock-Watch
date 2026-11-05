@@ -15,13 +15,5 @@ export const DEFAULT_SOCKET_PATHS = [
 
 export const POLL_INTERVAL_MS = 1000;
 export const STORAGE_REFRESH_INTERVAL_MS = 15000;
-export const RECONNECT_INTERVAL_MS = 2000;
 
-export const CONTAINER_STATES = {
-  RUNNING: 'running',
-  EXITED: 'exited',
-  PAUSED: 'paused',
-  RESTARTING: 'restarting',
-  DEAD: 'dead',
-  CREATED: 'created',
-};
+
