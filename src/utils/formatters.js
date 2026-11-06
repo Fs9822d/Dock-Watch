@@ -69,6 +69,28 @@ export function cleanContainerName(names) {
 }
 
 /**
+ * Return responsive column header labels for table
+ * @param {object|number} columns
+ * @param {object} [layout]
+ * @returns {object}
+ */
+export function getTableHeaders(columns, layout = {}) {
+  const col = typeof columns === 'number'
+    ? getResponsiveLayout(columns).columns
+    : (columns?.columns || columns || {});
+  const isCompactStorage = layout.compactStorage ?? (col.storage <= 14);
+  return {
+    selector: ' ',
+    name: (col.name || 0) < 9 ? 'NAME' : 'NAME / ID',
+    image: 'IMAGE',
+    status: 'STATUS',
+    cpu: 'CPU %',
+    ram: (col.ram || 0) >= 22 ? 'RAM (USAGE / LIMIT)' : 'RAM USAGE',
+    storage: isCompactStorage ? 'STORAGE' : 'STORAGE (DISK / IO)',
+  };
+}
+
+/**
  * Calculate dynamic table column widths and layout mode based on terminal columns
  * @param {number} [terminalWidth=120]
  * @returns {{
@@ -83,6 +105,15 @@ export function cleanContainerName(names) {
  *     cpu: number,
  *     ram: number,
  *     storage: number,
+ *   },
+ *   headers: {
+ *     selector: string,
+ *     name: string,
+ *     image: string,
+ *     status: string,
+ *     cpu: string,
+ *     ram: string,
+ *     storage: string,
  *   },
  *   totalWidth: number,
  * }}
@@ -110,6 +141,7 @@ export function getResponsiveLayout(terminalWidth = 120) {
       showStorage: true,
       compactStorage: false,
       columns,
+      headers: getTableHeaders(columns, { compactStorage: false }),
       totalWidth,
     };
   }
@@ -131,6 +163,7 @@ export function getResponsiveLayout(terminalWidth = 120) {
       showStorage: true,
       compactStorage: true,
       columns,
+      headers: getTableHeaders(columns, { compactStorage: true }),
       totalWidth,
     };
   }
@@ -154,6 +187,7 @@ export function getResponsiveLayout(terminalWidth = 120) {
     showStorage: false,
     compactStorage: false,
     columns,
+    headers: getTableHeaders(columns, { compactStorage: false }),
     totalWidth,
   };
 }

@@ -9,7 +9,10 @@ export function Header({
   columns = process.stdout.columns || 120,
 }) {
   const showSubtitle = columns >= 80;
-  const maxSocketLen = Math.max(12, columns - 42);
+  const isNarrow = columns < 60;
+  const maxSocketLen = isNarrow
+    ? Math.max(8, columns - 32)
+    : Math.max(12, columns - 42);
   let displaySocket = socketPath || 'Auto-detecting...';
   if (displaySocket.length > maxSocketLen) {
     displaySocket = `…${displaySocket.slice(-(maxSocketLen - 1))}`;
@@ -40,7 +43,7 @@ export function Header({
         <Box>
           <Text dimColor>Active: </Text>
           <Text bold color="green">{runningCount}</Text>
-          <Text dimColor> / {totalCount} containers</Text>
+          <Text dimColor>{isNarrow ? `/${totalCount}` : ` / ${totalCount} containers`}</Text>
         </Box>
       </Box>
     </Box>

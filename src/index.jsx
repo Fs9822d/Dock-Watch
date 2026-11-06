@@ -56,10 +56,12 @@ export function cleanup() {
   if (isCleanedUp) return;
   isCleanedUp = true;
   // Leave alternate screen buffer and restore cursor
-  try {
-    process.stdout.write(ANSI_LEAVE_ALT_SCREEN);
-  } catch {
-    // Ignore errors if stream is closed
+  if (process.stdout.isTTY) {
+    try {
+      process.stdout.write(ANSI_LEAVE_ALT_SCREEN);
+    } catch {
+      // Ignore errors if stream is closed
+    }
   }
 }
 
@@ -78,7 +80,9 @@ async function main() {
 
   // Enter the alternate screen buffer and reset cursor to home (1,1)
   // This isolates dock-watch from the shell scrollback history and prevents ghost line retention
-  process.stdout.write(ANSI_ENTER_ALT_SCREEN);
+  if (process.stdout.isTTY) {
+    process.stdout.write(ANSI_ENTER_ALT_SCREEN);
+  }
 
   // Render the Ink TUI
   const app = render(<App cliSocketPath={options.socket} />);
@@ -91,7 +95,9 @@ async function main() {
       if (typeof app.clear === 'function') {
         app.clear();
       }
-      process.stdout.write(ANSI_CLEAR_VIEWPORT);
+      if (process.stdout.isTTY) {
+        process.stdout.write(ANSI_CLEAR_VIEWPORT);
+      }
       // Force rerender with fresh dimensions so vertical-only resize immediately repaints
       app.rerender(
         <App
@@ -103,11 +109,15 @@ async function main() {
     }, 60);
   };
 
-  process.stdout.on('resize', handleResize);
+  if (process.stdout.isTTY) {
+    process.stdout.on('resize', handleResize);
+  }
 
   const handleExit = () => {
     if (resizeTimer) clearTimeout(resizeTimer);
-    process.stdout.off('resize', handleResize);
+    if (process.stdout.isTTY) {
+      process.stdout.off('resize', handleResize);
+    }
     app.unmount();
     cleanup();
     process.exit(0);
@@ -125,7 +135,9 @@ async function main() {
     await app.waitUntilExit();
   } finally {
     if (resizeTimer) clearTimeout(resizeTimer);
-    process.stdout.off('resize', handleResize);
+    if (process.stdout.isTTY) {
+      process.stdout.off('resize', handleResize);
+    }
     app.unmount();
     cleanup();
   }

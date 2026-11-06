@@ -18,9 +18,7 @@ export function App({
 }) {
   const { exit } = useApp();
 
-  const [columns, setColumns] = useState(
-    () => forcedColumns || initialColumns || process.stdout.columns || 120
-  );
+  const columns = forcedColumns || initialColumns || process.stdout.columns || 120;
   const [status, setStatus] = useState('connecting'); // 'connecting' | 'connected' | 'disconnected'
   const [socketPath, setSocketPath] = useState(null);
   const [checkedPaths, setCheckedPaths] = useState([]);
@@ -36,15 +34,6 @@ export function App({
   const clientRef = useRef(null);
   const storageCacheRef = useRef(new Map()); // containerId -> { sizeRw, sizeRootFs, lastFetched }
   const isFetchingRef = useRef(false);
-
-  // Synchronize columns when updated by the resize coordinator
-  useEffect(() => {
-    if (forcedColumns) {
-      setColumns(forcedColumns);
-    } else if (process.stdout.columns) {
-      setColumns(process.stdout.columns);
-    }
-  }, [forcedColumns, resizeTick]);
 
   // Initialize or attempt connection
   const attemptConnection = useCallback(async () => {

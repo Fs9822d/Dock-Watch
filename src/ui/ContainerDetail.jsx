@@ -30,8 +30,11 @@ export function ContainerDetail({ container, columns = process.stdout.columns ||
   }
 
   const isNarrow = columns < 105;
-  const maxTitleName = Math.max(8, columns - (columns < 80 ? 30 : 54));
+  const useCompactTitle = columns < 75;
+  const titleOverhead = useCompactTitle ? 34 : (isNarrow ? 56 : 58);
+  const maxTitleName = Math.max(8, columns - titleOverhead);
   const maxFieldLen = Math.max(16, isNarrow ? columns - 18 : Math.floor(columns * 0.48) - 14);
+  const isCompactMetrics = columns < 55;
 
   return (
     <Box
@@ -43,9 +46,9 @@ export function ContainerDetail({ container, columns = process.stdout.columns ||
       marginLeft={isNarrow ? 0 : 2}
     >
       <Box marginBottom={0}>
-        <Text bold color="yellow">{columns < 75 ? 'Diagnostics: ' : 'Container Diagnostics & Inspector: '}</Text>
-        <Text bold color="white">{truncate(container.name, maxTitleName)}</Text>
-        <Text dimColor> ({container.id.slice(0, 12)})</Text>
+        <Text bold color="yellow">{useCompactTitle ? 'Diagnostics: ' : 'Container Diagnostics & Inspector: '}</Text>
+        <Text bold color="white">{truncate(container.name || '', maxTitleName)}</Text>
+        <Text dimColor> ({(container.id || '').slice(0, 12)})</Text>
       </Box>
 
       <Box
@@ -86,11 +89,11 @@ export function ContainerDetail({ container, columns = process.stdout.columns ||
             <Text>{formatBytes(storage.sizeRootFsBytes)}</Text>
           </Box>
           <Box>
-            <Text dimColor>Block Disk I/O: </Text>
+            <Text dimColor>{isCompactMetrics ? 'IO: ' : 'Block Disk I/O: '}</Text>
             <Text>Read: {formatBytes(storage.blockReadBytes, 0)} | Write: {formatBytes(storage.blockWriteBytes, 0)}</Text>
           </Box>
           <Box>
-            <Text dimColor>Network Bandwidth: </Text>
+            <Text dimColor>{isCompactMetrics ? 'Net: ' : 'Network Bandwidth: '}</Text>
             <Text>RX: {formatBytes(network.rxBytes, 0)} | TX: {formatBytes(network.txBytes, 0)}</Text>
           </Box>
         </Box>

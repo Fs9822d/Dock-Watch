@@ -6,6 +6,7 @@ import {
   getMetricColor,
   truncate,
   getResponsiveLayout,
+  getTableHeaders,
 } from '../utils/formatters.js';
 import { ContainerDetail } from './ContainerDetail.jsx';
 
@@ -25,6 +26,7 @@ export function ContainerTable({
 
   const layout = getResponsiveLayout(columns);
   const col = layout.columns;
+  const headers = layout.headers || getTableHeaders(col, layout);
 
   return (
     <Box flexDirection="column" marginY={1}>
@@ -34,27 +36,23 @@ export function ContainerTable({
           <Text bold color="white"> </Text>
         </Box>
         <Box width={col.name}>
-          <Text bold color="white">NAME / ID</Text>
+          <Text bold color="white">{headers.name}</Text>
         </Box>
         <Box width={col.image}>
-          <Text bold color="white">IMAGE</Text>
+          <Text bold color="white">{headers.image}</Text>
         </Box>
         <Box width={col.status}>
-          <Text bold color="white">STATUS</Text>
+          <Text bold color="white">{headers.status}</Text>
         </Box>
         <Box width={col.cpu}>
-          <Text bold color="white">CPU %</Text>
+          <Text bold color="white">{headers.cpu}</Text>
         </Box>
         <Box width={col.ram}>
-          <Text bold color="white">
-            {col.ram >= 22 ? 'RAM (USAGE / LIMIT)' : 'RAM USAGE'}
-          </Text>
+          <Text bold color="white">{headers.ram}</Text>
         </Box>
         {layout.showStorage && (
           <Box width={col.storage}>
-            <Text bold color="white">
-              {layout.compactStorage ? 'STORAGE' : 'STORAGE (DISK / IO)'}
-            </Text>
+            <Text bold color="white">{headers.storage}</Text>
           </Box>
         )}
       </Box>

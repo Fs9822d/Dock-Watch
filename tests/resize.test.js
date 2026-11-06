@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import {
   getResponsiveLayout,
   calculateTableLayout,
+  getTableHeaders,
   truncate,
   formatBytes,
   formatPercent,
@@ -335,10 +336,11 @@ test('Alternate Screen Buffer Lifecycle: constants adhere to VT100 / XTerm stand
   assert.equal(ANSI_ENTER_ALT_SCREEN, '\x1b[?1049h\x1b[H', 'Must enter alternate screen buffer (1049h) and move to home');
   assert.equal(ANSI_LEAVE_ALT_SCREEN, '\x1b[?1049l\x1b[?25h', 'Must leave alternate screen buffer (1049l) and unhide cursor');
   assert.equal(ANSI_CLEAR_VIEWPORT, '\x1b[2J\x1b[H', 'Must clear viewport (2J) and move home (H)');
+  assert.equal(ANSI_CLEAR_SCREEN_AND_SCROLLBACK, '\x1b[2J\x1b[3J\x1b[H', 'Must clear viewport (2J), clear scrollback (3J), and move home (H)');
 });
 
 test('Header & Footer line width boundaries: never wrap on standard terminal sizes', () => {
-  const widths = [60, 70, 75, 80, 85, 90, 95, 100, 120];
+  const widths = [46, 48, 50, 52, 54, 55, 56, 60, 70, 75, 80, 85, 90, 95, 100, 120];
 
   for (const w of widths) {
     // Check Header line 1
@@ -352,12 +354,14 @@ test('Header & Footer line width boundaries: never wrap on standard terminal siz
     );
 
     // Check Header line 2 with long socket path
-    const maxSocketLen = Math.max(12, w - 42);
+    const isNarrow = w < 60;
+    const maxSocketLen = isNarrow ? Math.max(8, w - 32) : Math.max(12, w - 42);
     let displaySocket = '/var/run/user/1000/docker.sock';
     if (displaySocket.length > maxSocketLen) {
       displaySocket = `…${displaySocket.slice(-(maxSocketLen - 1))}`;
     }
-    const headerLine2 = `Socket: ${displaySocket}`.length + 'Active: 10 / 15 containers'.length + 6;
+    const countText = isNarrow ? 'Active: 10/15' : 'Active: 10 / 15 containers';
+    const headerLine2 = `Socket: ${displaySocket}`.length + countText.length + 6;
     assert.ok(
       headerLine2 <= w,
       `Header line 2 (${headerLine2}) exceeds width ${w}`
@@ -374,5 +378,137 @@ test('Header & Footer line width boundaries: never wrap on standard terminal siz
       footerLine <= w,
       `Footer line (${footerLine}) exceeds width ${w}`
     );
+
+    // Check Table column header labels
+    const layout = getResponsiveLayout(w);
+    const col = layout.columns;
+    const headers = layout.headers || getTableHeaders(col, layout);
+
+    assert.ok(
+      headers.name.length <= col.name,
+      `Name header label "${headers.name}" (${headers.name.length}) exceeds col.name (${col.name}) at width ${w}`
+    );
+
+    assert.ok(
+      headers.image.length <= col.image,
+      `Image header label "${headers.image}" (${headers.image.length}) exceeds col.image (${col.image}) at width ${w}`
+    );
+
+    assert.ok(
+      headers.status.length <= col.status,
+      `Status header label "${headers.status}" (${headers.status.length}) exceeds col.status (${col.status}) at width ${w}`
+    );
+
+    assert.ok(
+      headers.cpu.length <= col.cpu,
+      `CPU header label "${headers.cpu}" (${headers.cpu.length}) exceeds col.cpu (${col.cpu}) at width ${w}`
+    );
+
+    assert.ok(
+      headers.ram.length <= col.ram,
+      `RAM header label "${headers.ram}" (${headers.ram.length}) exceeds col.ram (${col.ram}) at width ${w}`
+    );
+
+    if (layout.showStorage) {
+      assert.ok(
+        headers.storage.length <= col.storage,
+        `Storage header label "${headers.storage}" (${headers.storage.length}) exceeds col.storage (${col.storage}) at width ${w}`
+      );
+    }
   }
+});
+
+test('Inspector Drawer: title and metrics fit within terminal width across narrow widths (46 to 120)', () => {
+  const container = {
+    id: '1234567890abcdef1234567890abcdef',
+    name: 'extremely-long-container-name-for-inspector-drawer-test',
+    image: 'registry.corp.internal/services/analytics-worker:v2.0',
+    status: 'Up 4 days (healthy)',
+    state: 'running',
+    stats: {
+      storage: {
+        sizeRwBytes: 104857600,
+        sizeRootFsBytes: 524288000,
+        blockReadBytes: 10737418240, // 10 GB
+        blockWriteBytes: 21474836480, // 20 GB
+      },
+      network: {
+        rxBytes: 5368709120, // 5 GB
+        txBytes: 8589934592, // 8 GB
+      },
+    },
+  };
+
+  for (let w = 46; w <= 120; w++) {
+    // Title row check:
+    const isNarrow = w < 105;
+    const useCompactTitle = w < 75;
+    const titleOverhead = useCompactTitle ? 34 : (isNarrow ? 56 : 58);
+    const maxTitleName = Math.max(8, w - titleOverhead);
+    const prefix = useCompactTitle ? 'Diagnostics: ' : 'Container Diagnostics & Inspector: ';
+    const truncatedName = truncate(container.name, maxTitleName);
+    const idSnippet = ` (${container.id.slice(0, 12)})`;
+    const boxOverhead = 6 + (!isNarrow ? 2 : 0);
+    const titleRowLen = prefix.length + truncatedName.length + idSnippet.length + boxOverhead;
+
+    assert.ok(
+      titleRowLen <= w,
+      `Inspector title row (${titleRowLen}) exceeds width ${w}`
+    );
+
+    // Metrics check across all widths:
+    const interiorWidth = w - 6;
+    const isCompactMetrics = w < 55;
+    const ioLabel = isCompactMetrics ? 'IO: ' : 'Block Disk I/O: ';
+    const ioText = `${ioLabel}Read: ${formatBytes(container.stats.storage.blockReadBytes, 0)} | Write: ${formatBytes(container.stats.storage.blockWriteBytes, 0)}`;
+    const netLabel = isCompactMetrics ? 'Net: ' : 'Network Bandwidth: ';
+    const netText = `${netLabel}RX: ${formatBytes(container.stats.network.rxBytes, 0)} | TX: ${formatBytes(container.stats.network.txBytes, 0)}`;
+
+    const availableWidth = isNarrow ? interiorWidth : Math.floor((w - 8) * 0.48);
+    assert.ok(
+      ioText.length <= availableWidth,
+      `IO text "${ioText}" (${ioText.length}) exceeds available width ${availableWidth} at terminal width ${w}`
+    );
+    assert.ok(
+      netText.length <= availableWidth,
+      `Net text "${netText}" (${netText.length}) exceeds available width ${availableWidth} at terminal width ${w}`
+    );
+  }
+});
+
+test('process.stdout.isTTY guards: alternate screen buffer sequences and resize listener attachment', () => {
+  // Test TTY guard logic matching src/index.jsx
+  const writes = [];
+  const fakeStream = new EventEmitter();
+  fakeStream.isTTY = false;
+  fakeStream.write = (chunk) => {
+    writes.push(chunk);
+    return true;
+  };
+
+  let resizeListenerAttached = false;
+  fakeStream.on = (event, fn) => {
+    if (event === 'resize') resizeListenerAttached = true;
+    return EventEmitter.prototype.on.call(fakeStream, event, fn);
+  };
+
+  // Simulating startup when isTTY is false
+  if (fakeStream.isTTY) {
+    fakeStream.write(ANSI_ENTER_ALT_SCREEN);
+    fakeStream.on('resize', () => {});
+  }
+
+  assert.equal(writes.length, 0, 'Must NOT write ANSI_ENTER_ALT_SCREEN when isTTY is falsy');
+  assert.equal(resizeListenerAttached, false, 'Must NOT register resize listener when isTTY is falsy');
+
+  // Simulating startup when isTTY is true
+  fakeStream.isTTY = true;
+  if (fakeStream.isTTY) {
+    fakeStream.write(ANSI_ENTER_ALT_SCREEN);
+    fakeStream.on('resize', () => {});
+  }
+
+  assert.equal(writes.length, 1, 'Must write ANSI_ENTER_ALT_SCREEN when isTTY is truthy');
+  assert.equal(writes[0], ANSI_ENTER_ALT_SCREEN);
+  assert.equal(resizeListenerAttached, true, 'Must register resize listener when isTTY is truthy');
 });

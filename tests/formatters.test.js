@@ -7,6 +7,7 @@ import {
   truncate,
   cleanContainerName,
   getResponsiveLayout,
+  getTableHeaders,
   calculateTableLayout,
 } from '../src/utils/formatters.js';
 
@@ -118,5 +119,34 @@ test('getResponsiveLayout safely handles invalid inputs and defaults to full', (
 
 test('calculateTableLayout is an alias of getResponsiveLayout', () => {
   assert.strictEqual(calculateTableLayout, getResponsiveLayout);
+});
+
+test('getTableHeaders returns responsive headers based on column dimensions', () => {
+  const narrowCol = { name: 8, ram: 12, storage: 0 };
+  const narrowHeaders = getTableHeaders(narrowCol);
+  assert.equal(narrowHeaders.name, 'NAME');
+  assert.equal(narrowHeaders.ram, 'RAM USAGE');
+
+  const standardCol = { name: 18, ram: 24, storage: 24 };
+  const standardHeaders = getTableHeaders(standardCol, { compactStorage: false });
+  assert.equal(standardHeaders.name, 'NAME / ID');
+  assert.equal(standardHeaders.ram, 'RAM (USAGE / LIMIT)');
+  assert.equal(standardHeaders.storage, 'STORAGE (DISK / IO)');
+
+  const compactCol = { name: 15, ram: 20, storage: 12 };
+  const compactHeaders = getTableHeaders(compactCol, { compactStorage: true });
+  assert.equal(compactHeaders.storage, 'STORAGE');
+
+  // Passing terminal width number directly
+  const headersAt50 = getTableHeaders(50);
+  assert.equal(headersAt50.name, 'NAME');
+  const headersAt120 = getTableHeaders(120);
+  assert.equal(headersAt120.name, 'NAME / ID');
+
+  // getResponsiveLayout includes matching headers
+  const layout50 = getResponsiveLayout(50);
+  assert.equal(layout50.headers.name, 'NAME');
+  const layout120 = getResponsiveLayout(120);
+  assert.equal(layout120.headers.name, 'NAME / ID');
 });
 
