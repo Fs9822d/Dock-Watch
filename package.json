@@ -26,7 +26,7 @@
     "containers"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "ink": "^5.1.0",
     "react": "^18.3.1",
