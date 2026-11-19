@@ -1,8 +1,9 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { formatBytes, formatPercent } from '../utils/formatters.js';
+import { formatBytes } from '../utils/formatters.js';
+import { Histogram } from './Histogram.jsx';
 
-export function ContainerDetail({ container }) {
+export function ContainerDetail({ container, history = [] }) {
   if (!container) return null;
 
   const stats = container.stats;
@@ -23,6 +24,25 @@ export function ContainerDetail({ container }) {
         .join(', ')
     : 'None';
 
+  const cpuValues = history.map((s) => s.cpuPercent);
+  const memValues = history.map((s) => s.memoryPercent);
+
+  const totalCpus = stats?.cpu?.onlineCpus || 1;
+  const currentCpu = stats?.cpu?.percent ?? 0;
+  const usedCpus = (currentCpu / 100).toFixed(1);
+
+  const cpuBadge = stats
+    ? `${usedCpus} / ${totalCpus} cores`
+    : null;
+
+  const memBadge = stats?.memory?.limitBytes
+    ? `${formatBytes(stats.memory.usageBytes)} / ${formatBytes(stats.memory.limitBytes)}`
+    : null;
+
+  const emptyMsg = container.state !== 'running'
+    ? 'No telemetry recorded for this container'
+    : 'Collecting live telemetry...';
+
   return (
     <Box
       flexDirection="column"
@@ -38,6 +58,7 @@ export function ContainerDetail({ container }) {
         <Text dimColor> ({container.id.slice(0, 12)})</Text>
       </Box>
 
+      {/* Row 1: Configuration & Instantaneous Metrics */}
       <Box flexDirection="row" justifyContent="space-between" marginTop={1}>
         {/* Left Column: Config & Runtime */}
         <Box flexDirection="column" width="48%">
@@ -80,6 +101,25 @@ export function ContainerDetail({ container }) {
             <Text>RX: {formatBytes(network.rxBytes)} | TX: {formatBytes(network.txBytes)}</Text>
           </Box>
         </Box>
+      </Box>
+
+      {/* Row 2: Histograms stacked one on top of the other */}
+      <Box flexDirection="column" marginTop={1}>
+        <Histogram
+          title="CPU Utilization History"
+          values={cpuValues}
+          badge={cpuBadge}
+          emptyMessage={emptyMsg}
+          height={2}
+          max={totalCpus * 100}
+        />
+        <Histogram
+          title="Memory Utilization History"
+          values={memValues}
+          badge={memBadge}
+          emptyMessage={emptyMsg}
+          height={2}
+        />
       </Box>
     </Box>
   );

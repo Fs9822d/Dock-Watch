@@ -3,8 +3,16 @@ import { Box, Text, useApp, useInput } from 'ink';
 import { resolveDockerSocket } from '../client/socket-resolver.js';
 import { DockerClient } from '../client/docker-client.js';
 import { parseContainerStats } from '../telemetry/stats-parser.js';
+import { TelemetryStore } from '../forensics/telemetry-store.js';
 import { cleanContainerName } from '../utils/formatters.js';
-import { POLL_INTERVAL_MS, STORAGE_REFRESH_INTERVAL_MS, RECONNECT_INTERVAL_MS } from '../utils/constants.js';
+import {
+  POLL_INTERVAL_MS,
+  STORAGE_REFRESH_INTERVAL_MS,
+  RECONNECT_INTERVAL_MS,
+  TELEMETRY_STORE_FLUSH_INTERVAL_MS,
+  TELEMETRY_STORE_PRUNE_INTERVAL_MS,
+  TELEMETRY_STORE_RETENTION_MS,
+} from '../utils/constants.js';
 import { Header } from './Header.jsx';
 import { ContainerTable } from './ContainerTable.jsx';
 import { DisconnectedView } from './DisconnectedView.jsx';
@@ -21,13 +29,34 @@ export function App({ cliSocketPath = null }) {
   const [containers, setContainers] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [expandedId, setExpandedId] = useState(null);
+  const [expandedHistory, setExpandedHistory] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [countdown, setCountdown] = useState(2);
 
   // References to preserve data across polling ticks
   const clientRef = useRef(null);
   const storageCacheRef = useRef(new Map()); // containerId -> { sizeRw, sizeRootFs, lastFetched }
+  const telemetryStoreRef = useRef(null);
   const isFetchingRef = useRef(false);
+  const expandedIdRef = useRef(null);
+  expandedIdRef.current = expandedId;
+
+  // Retrieve history samples for the currently expanded container
+  const refreshExpandedHistory = useCallback((targetId) => {
+    if (!targetId || !telemetryStoreRef.current) {
+      setExpandedHistory([]);
+      return;
+    }
+
+    try {
+      const history = telemetryStoreRef.current.queryHistory(targetId, {
+        limit: 45,
+      });
+      setExpandedHistory(history);
+    } catch {
+      setExpandedHistory([]);
+    }
+  }, []);
 
   // Initialize or attempt connection
   const attemptConnection = useCallback(async () => {
@@ -79,13 +108,18 @@ export function App({ cliSocketPath = null }) {
               const rawStats = await clientRef.current.getContainerStats(id);
               const cachedStorage = storageCacheRef.current.get(id) || {};
               parsedStats = parseContainerStats(rawStats, cachedStorage);
+
+              telemetryStoreRef.current?.record(
+                { id, name, image, state },
+                parsedStats,
+              );
             } catch {
               // Container might have stopped during fetch
               parsedStats = null;
             }
           }
 
-          return {
+          const container = {
             id,
             name,
             image,
@@ -95,11 +129,25 @@ export function App({ cliSocketPath = null }) {
             Ports: raw.Ports,
             stats: parsedStats,
           };
+
+          if (state !== 'running') {
+            try {
+              telemetryStoreRef.current?.upsertContainer(container);
+            } catch (error) {
+              console.error('Failed to persist container metadata:', error.message);
+            }
+          }
+
+          return container;
         })
       );
 
       setContainers(updatedContainers);
       setLastUpdated(new Date());
+
+      if (expandedIdRef.current) {
+        refreshExpandedHistory(expandedIdRef.current);
+      }
     } catch (err) {
       if (err.code === 'ENOENT' || err.code === 'ECONNREFUSED') {
         setStatus('disconnected');
@@ -109,7 +157,7 @@ export function App({ cliSocketPath = null }) {
     } finally {
       isFetchingRef.current = false;
     }
-  }, []);
+  }, [refreshExpandedHistory]);
 
   // Periodic Storage Size Fetch (Runs every 15s to minimize daemon disk I/O)
   const pollStorageSizes = useCallback(async () => {
@@ -132,10 +180,58 @@ export function App({ cliSocketPath = null }) {
     }
   }, []);
 
-  // Initial connection mount
+  // Initial connection and telemetry database mount
   useEffect(() => {
+    try {
+      telemetryStoreRef.current = new TelemetryStore(undefined, {
+        retentionMs: TELEMETRY_STORE_RETENTION_MS,
+      });
+      telemetryStoreRef.current.prune();
+    } catch (error) {
+      telemetryStoreRef.current = null;
+      console.error('Failed to open telemetry database:', error.message);
+    }
+
+    const flushTimer = setInterval(() => {
+      try {
+        telemetryStoreRef.current?.flush();
+      } catch (error) {
+        console.error('Failed to flush telemetry:', error.message);
+      }
+    }, TELEMETRY_STORE_FLUSH_INTERVAL_MS);
+
+    const pruneTimer = setInterval(() => {
+      try {
+        telemetryStoreRef.current?.prune();
+      } catch (error) {
+        console.error('Failed to prune telemetry:', error.message);
+      }
+    }, TELEMETRY_STORE_PRUNE_INTERVAL_MS);
+
     attemptConnection();
+
+    return () => {
+      clearInterval(flushTimer);
+      clearInterval(pruneTimer);
+
+      try {
+        telemetryStoreRef.current?.close();
+      } catch (error) {
+        console.error('Failed to close telemetry database:', error.message);
+      } finally {
+        telemetryStoreRef.current = null;
+      }
+    };
   }, [attemptConnection]);
+
+  // Sync expanded history when expanded container ID changes
+  useEffect(() => {
+    if (expandedId) {
+      refreshExpandedHistory(expandedId);
+    } else {
+      setExpandedHistory([]);
+    }
+  }, [expandedId, refreshExpandedHistory]);
 
   // Telemetry Interval (1 second)
   useEffect(() => {
@@ -196,7 +292,11 @@ export function App({ cliSocketPath = null }) {
     } else if (key.return || input === ' ') {
       const current = containers[selectedIndex];
       if (current) {
-        setExpandedId((prev) => (prev === current.id ? null : current.id));
+        setExpandedId((prev) => {
+          const next = prev === current.id ? null : current.id;
+          refreshExpandedHistory(next);
+          return next;
+        });
       }
     }
   });
@@ -227,6 +327,7 @@ export function App({ cliSocketPath = null }) {
           containers={containers}
           selectedIndex={selectedIndex}
           expandedId={expandedId}
+          history={expandedHistory}
         />
       )}
 
