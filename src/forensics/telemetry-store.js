@@ -80,9 +80,10 @@ export class TelemetryStore {
       INSERT INTO containers (id, name, image, first_seen, last_seen)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
-        name = excluded.name,
-        image = excluded.image,
-        last_seen = excluded.last_seen
+        name = CASE WHEN excluded.last_seen >= containers.last_seen THEN excluded.name ELSE containers.name END,
+        image = CASE WHEN excluded.last_seen >= containers.last_seen THEN excluded.image ELSE containers.image END,
+        first_seen = MIN(containers.first_seen, excluded.first_seen),
+        last_seen = MAX(containers.last_seen, excluded.last_seen)
     `);
 
     this.insertSampleStatement = this.database.prepare(`
@@ -249,13 +250,15 @@ export class TelemetryStore {
     if (this.closed) return 0;
 
     let flushed = 0;
-    if (this.queue.length > 0) {
-      flushed = this.flush();
+    try {
+      if (this.queue.length > 0) {
+        flushed = this.flush();
+      }
+      return flushed;
+    } finally {
+      this.closed = true;
+      this.database.close();
     }
-
-    this.closed = true;
-    this.database.close();
-    return flushed;
   }
 
   normalizeTimestamp(timestamp) {

@@ -131,7 +131,11 @@ export function App({ cliSocketPath = null }) {
           };
 
           if (state !== 'running') {
-            telemetryStoreRef.current?.upsertContainer(container);
+            try {
+              telemetryStoreRef.current?.upsertContainer(container);
+            } catch (error) {
+              console.error('Failed to persist container metadata:', error.message);
+            }
           }
 
           return container;

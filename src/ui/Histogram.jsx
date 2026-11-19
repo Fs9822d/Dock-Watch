@@ -48,7 +48,7 @@ export function Histogram({
       {/* Line 2: History sample window & Min/Avg/Max stats */}
       {hasData && (
         <Box flexDirection="row" justifyContent="space-between" marginBottom={0}>
-          <Text dimColor>History ({stats.count}s)</Text>
+          <Text dimColor>History ({stats.count} {stats.count === 1 ? 'sample' : 'samples'})</Text>
           <Box>
             <Text dimColor>Min: </Text>
             <Text color="white">{formatValue(stats.min)}</Text>

@@ -111,6 +111,7 @@ export function ContainerDetail({ container, history = [] }) {
           badge={cpuBadge}
           emptyMessage={emptyMsg}
           height={2}
+          max={totalCpus * 100}
         />
         <Histogram
           title="Memory Utilization History"

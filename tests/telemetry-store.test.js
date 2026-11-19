@@ -110,9 +110,56 @@ test('TelemetryStore upserts container metadata', () => {
   assert.equal(containers.length, 1);
   assert.equal(containers[0].name, 'new-name');
   assert.equal(containers[0].image, 'new-image');
+  assert.equal(containers[0].firstSeen, 100);
   assert.equal(containers[0].lastSeen, 200);
 
   store.close();
+});
+
+test('TelemetryStore does not overwrite newer metadata with older queued observations', () => {
+  const store = new TelemetryStore(':memory:');
+
+  // Queued observation recorded at t=100
+  store.record(
+    { id: 'container-a', name: 'queued-name', image: 'queued-image' },
+    sample(100),
+  );
+
+  // Directly upsert newer metadata at t=200
+  store.upsertContainer(
+    { id: 'container-a', name: 'newer-name', image: 'newer-image' },
+    200,
+  );
+
+  // Flush the older queued observation (t=100)
+  store.flush();
+
+  const [container] = store.listContainers();
+  assert.equal(container.name, 'newer-name');
+  assert.equal(container.image, 'newer-image');
+  assert.equal(container.firstSeen, 100);
+  assert.equal(container.lastSeen, 200);
+
+  store.close();
+});
+
+test('TelemetryStore.close() closes database even if flush throws', () => {
+  const store = new TelemetryStore(':memory:');
+
+  store.record({ id: 'container-a', name: 'web' }, sample(100));
+
+  // Force flush to throw by overriding it
+  store.flush = () => {
+    throw new Error('Disk write failed');
+  };
+
+  assert.throws(() => store.close(), { message: 'Disk write failed' });
+  assert.equal(store.closed, true);
+
+  // Calling queryHistory on a closed store throws
+  assert.throws(() => store.queryHistory('container-a'), {
+    message: 'TelemetryStore is closed',
+  });
 });
 
 test('TelemetryStore prunes samples older than retention', () => {
