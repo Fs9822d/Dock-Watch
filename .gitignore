@@ -20,6 +20,11 @@ coverage/
 .DS_Store
 Thumbs.db
 
+# IDE & Editor settings
+.zed/
+.vscode/
+.idea/
+
 # Ignored project skills directory
 skills/
 

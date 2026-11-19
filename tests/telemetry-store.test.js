@@ -62,6 +62,44 @@ test('TelemetryStore flushes a batch and queries history in timestamp order', ()
   store.close();
 });
 
+test('TelemetryStore automatically flushes queue on queryHistory', () => {
+  const store = new TelemetryStore(':memory:');
+
+  store.record(
+    { id: 'container-a', name: 'web', image: 'nginx' },
+    sample('2026-11-18T00:00:01Z', { cpuPercent: 15 }),
+  );
+
+  // queryHistory should auto-flush without requiring explicit store.flush()
+  const history = store.queryHistory('container-a');
+  assert.equal(history.length, 1);
+  assert.equal(history[0].cpuPercent, 15);
+
+  store.close();
+});
+
+test('TelemetryStore returns the most recent samples in chronological order', () => {
+  const store = new TelemetryStore(':memory:');
+
+  // Insert 5 samples with increasing timestamps
+  for (let i = 1; i <= 5; i++) {
+    store.record(
+      { id: 'container-a', name: 'web', image: 'nginx' },
+      sample(`2026-11-18T00:00:0${i}Z`, { cpuPercent: i * 10 }),
+    );
+  }
+
+  // Request latest 3 samples
+  const history = store.queryHistory('container-a', { limit: 3 });
+  assert.equal(history.length, 3);
+  // Should be samples 3, 4, 5 (cpuPercent 30, 40, 50) in ASC order
+  assert.equal(history[0].cpuPercent, 30);
+  assert.equal(history[1].cpuPercent, 40);
+  assert.equal(history[2].cpuPercent, 50);
+
+  store.close();
+});
+
 test('TelemetryStore upserts container metadata', () => {
   const store = new TelemetryStore(':memory:');
 

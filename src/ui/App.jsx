@@ -29,6 +29,7 @@ export function App({ cliSocketPath = null }) {
   const [containers, setContainers] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [expandedId, setExpandedId] = useState(null);
+  const [expandedHistory, setExpandedHistory] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [countdown, setCountdown] = useState(2);
 
@@ -37,6 +38,25 @@ export function App({ cliSocketPath = null }) {
   const storageCacheRef = useRef(new Map()); // containerId -> { sizeRw, sizeRootFs, lastFetched }
   const telemetryStoreRef = useRef(null);
   const isFetchingRef = useRef(false);
+  const expandedIdRef = useRef(null);
+  expandedIdRef.current = expandedId;
+
+  // Retrieve history samples for the currently expanded container
+  const refreshExpandedHistory = useCallback((targetId) => {
+    if (!targetId || !telemetryStoreRef.current) {
+      setExpandedHistory([]);
+      return;
+    }
+
+    try {
+      const history = telemetryStoreRef.current.queryHistory(targetId, {
+        limit: 45,
+      });
+      setExpandedHistory(history);
+    } catch {
+      setExpandedHistory([]);
+    }
+  }, []);
 
   // Initialize or attempt connection
   const attemptConnection = useCallback(async () => {
@@ -120,6 +140,10 @@ export function App({ cliSocketPath = null }) {
 
       setContainers(updatedContainers);
       setLastUpdated(new Date());
+
+      if (expandedIdRef.current) {
+        refreshExpandedHistory(expandedIdRef.current);
+      }
     } catch (err) {
       if (err.code === 'ENOENT' || err.code === 'ECONNREFUSED') {
         setStatus('disconnected');
@@ -129,7 +153,7 @@ export function App({ cliSocketPath = null }) {
     } finally {
       isFetchingRef.current = false;
     }
-  }, []);
+  }, [refreshExpandedHistory]);
 
   // Periodic Storage Size Fetch (Runs every 15s to minimize daemon disk I/O)
   const pollStorageSizes = useCallback(async () => {
@@ -196,6 +220,15 @@ export function App({ cliSocketPath = null }) {
     };
   }, [attemptConnection]);
 
+  // Sync expanded history when expanded container ID changes
+  useEffect(() => {
+    if (expandedId) {
+      refreshExpandedHistory(expandedId);
+    } else {
+      setExpandedHistory([]);
+    }
+  }, [expandedId, refreshExpandedHistory]);
+
   // Telemetry Interval (1 second)
   useEffect(() => {
     if (status !== 'connected') return;
@@ -255,7 +288,11 @@ export function App({ cliSocketPath = null }) {
     } else if (key.return || input === ' ') {
       const current = containers[selectedIndex];
       if (current) {
-        setExpandedId((prev) => (prev === current.id ? null : current.id));
+        setExpandedId((prev) => {
+          const next = prev === current.id ? null : current.id;
+          refreshExpandedHistory(next);
+          return next;
+        });
       }
     }
   });
@@ -286,6 +323,7 @@ export function App({ cliSocketPath = null }) {
           containers={containers}
           selectedIndex={selectedIndex}
           expandedId={expandedId}
+          history={expandedHistory}
         />
       )}
 

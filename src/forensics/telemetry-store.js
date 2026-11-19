@@ -86,7 +86,8 @@ export class TelemetryStore {
     `);
 
     this.insertSampleStatement = this.database.prepare(`
-      INSERT INTO telemetry_samples (\n        container_id,
+      INSERT INTO telemetry_samples (
+        container_id,
         sampled_at,
         cpu_percent,
         online_cpus,
@@ -197,30 +198,38 @@ export class TelemetryStore {
   queryHistory(containerId, options = {}) {
     if (this.closed) throw new Error('TelemetryStore is closed');
 
+    if (this.queue.length > 0) {
+      this.flush();
+    }
+
     const limit = Math.max(1, Math.min(options.limit ?? 300, 10000));
     const from = options.from ?? 0;
     const to = options.to ?? Number.MAX_SAFE_INTEGER;
 
+    // Subquery selects the most recent `limit` samples, outer query sorts chronologically (ASC)
     const statement = this.database.prepare(`
-      SELECT
-        container_id AS containerId,
-        sampled_at AS sampledAt,
-        cpu_percent AS cpuPercent,
-        online_cpus AS onlineCpus,
-        memory_usage_bytes AS memoryUsageBytes,
-        raw_memory_usage_bytes AS rawMemoryUsageBytes,
-        memory_limit_bytes AS memoryLimitBytes,
-        memory_percent AS memoryPercent,
-        block_read_bytes AS blockReadBytes,
-        block_write_bytes AS blockWriteBytes,
-        network_rx_bytes AS networkRxBytes,
-        network_tx_bytes AS networkTxBytes,
-        size_rw_bytes AS sizeRwBytes,
-        size_root_fs_bytes AS sizeRootFsBytes
-      FROM telemetry_samples
-      WHERE container_id = ? AND sampled_at >= ? AND sampled_at <= ?
-      ORDER BY sampled_at ASC
-      LIMIT ?
+      SELECT * FROM (
+        SELECT
+          container_id AS containerId,
+          sampled_at AS sampledAt,
+          cpu_percent AS cpuPercent,
+          online_cpus AS onlineCpus,
+          memory_usage_bytes AS memoryUsageBytes,
+          raw_memory_usage_bytes AS rawMemoryUsageBytes,
+          memory_limit_bytes AS memoryLimitBytes,
+          memory_percent AS memoryPercent,
+          block_read_bytes AS blockReadBytes,
+          block_write_bytes AS blockWriteBytes,
+          network_rx_bytes AS networkRxBytes,
+          network_tx_bytes AS networkTxBytes,
+          size_rw_bytes AS sizeRwBytes,
+          size_root_fs_bytes AS sizeRootFsBytes
+        FROM telemetry_samples
+        WHERE container_id = ? AND sampled_at >= ? AND sampled_at <= ?
+        ORDER BY sampled_at DESC
+        LIMIT ?
+      )
+      ORDER BY sampledAt ASC
     `);
 
     return statement.all(containerId, from, to, limit);

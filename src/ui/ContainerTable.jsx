@@ -8,7 +8,12 @@ import {
 } from '../utils/formatters.js';
 import { ContainerDetail } from './ContainerDetail.jsx';
 
-export function ContainerTable({ containers = [], selectedIndex = 0, expandedId = null }) {
+export function ContainerTable({
+  containers = [],
+  selectedIndex = 0,
+  expandedId = null,
+  history = [],
+}) {
   if (containers.length === 0) {
     return (
       <Box borderStyle="single" borderColor="gray" padding={1} marginY={1} justifyContent="center">
@@ -121,7 +126,7 @@ export function ContainerTable({ containers = [], selectedIndex = 0, expandedId 
             </Box>
 
             {/* Expandable Inspector Drawer */}
-            {isExpanded && <ContainerDetail container={container} />}
+            {isExpanded && <ContainerDetail container={container} history={history} />}
           </Box>
         );
       })}
