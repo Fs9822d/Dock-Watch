@@ -3,8 +3,16 @@ import { Box, Text, useApp, useInput } from 'ink';
 import { resolveDockerSocket } from '../client/socket-resolver.js';
 import { DockerClient } from '../client/docker-client.js';
 import { parseContainerStats } from '../telemetry/stats-parser.js';
+import { TelemetryStore } from '../forensics/telemetry-store.js';
 import { cleanContainerName } from '../utils/formatters.js';
-import { POLL_INTERVAL_MS, STORAGE_REFRESH_INTERVAL_MS, RECONNECT_INTERVAL_MS } from '../utils/constants.js';
+import {
+  POLL_INTERVAL_MS,
+  STORAGE_REFRESH_INTERVAL_MS,
+  RECONNECT_INTERVAL_MS,
+  TELEMETRY_STORE_FLUSH_INTERVAL_MS,
+  TELEMETRY_STORE_PRUNE_INTERVAL_MS,
+  TELEMETRY_STORE_RETENTION_MS,
+} from '../utils/constants.js';
 import { Header } from './Header.jsx';
 import { ContainerTable } from './ContainerTable.jsx';
 import { DisconnectedView } from './DisconnectedView.jsx';
@@ -27,6 +35,7 @@ export function App({ cliSocketPath = null }) {
   // References to preserve data across polling ticks
   const clientRef = useRef(null);
   const storageCacheRef = useRef(new Map()); // containerId -> { sizeRw, sizeRootFs, lastFetched }
+  const telemetryStoreRef = useRef(null);
   const isFetchingRef = useRef(false);
 
   // Initialize or attempt connection
@@ -79,13 +88,18 @@ export function App({ cliSocketPath = null }) {
               const rawStats = await clientRef.current.getContainerStats(id);
               const cachedStorage = storageCacheRef.current.get(id) || {};
               parsedStats = parseContainerStats(rawStats, cachedStorage);
+
+              telemetryStoreRef.current?.record(
+                { id, name, image, state },
+                parsedStats,
+              );
             } catch {
               // Container might have stopped during fetch
               parsedStats = null;
             }
           }
 
-          return {
+          const container = {
             id,
             name,
             image,
@@ -95,6 +109,12 @@ export function App({ cliSocketPath = null }) {
             Ports: raw.Ports,
             stats: parsedStats,
           };
+
+          if (state !== 'running') {
+            telemetryStoreRef.current?.upsertContainer(container);
+          }
+
+          return container;
         })
       );
 
@@ -132,9 +152,48 @@ export function App({ cliSocketPath = null }) {
     }
   }, []);
 
-  // Initial connection mount
+  // Initial connection and telemetry database mount
   useEffect(() => {
+    try {
+      telemetryStoreRef.current = new TelemetryStore(undefined, {
+        retentionMs: TELEMETRY_STORE_RETENTION_MS,
+      });
+      telemetryStoreRef.current.prune();
+    } catch (error) {
+      telemetryStoreRef.current = null;
+      console.error('Failed to open telemetry database:', error.message);
+    }
+
+    const flushTimer = setInterval(() => {
+      try {
+        telemetryStoreRef.current?.flush();
+      } catch (error) {
+        console.error('Failed to flush telemetry:', error.message);
+      }
+    }, TELEMETRY_STORE_FLUSH_INTERVAL_MS);
+
+    const pruneTimer = setInterval(() => {
+      try {
+        telemetryStoreRef.current?.prune();
+      } catch (error) {
+        console.error('Failed to prune telemetry:', error.message);
+      }
+    }, TELEMETRY_STORE_PRUNE_INTERVAL_MS);
+
     attemptConnection();
+
+    return () => {
+      clearInterval(flushTimer);
+      clearInterval(pruneTimer);
+
+      try {
+        telemetryStoreRef.current?.close();
+      } catch (error) {
+        console.error('Failed to close telemetry database:', error.message);
+      } finally {
+        telemetryStoreRef.current = null;
+      }
+    };
   }, [attemptConnection]);
 
   // Telemetry Interval (1 second)
